@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ToDo → Calendar Sync | Outlook 自動登録ツール</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/dist/msal-browser.min.js"></script>
+  <style>
+    :root {
+      --ms-blue: #0078d4;
+      --ms-dark: #005a9e;
+      --ms-light: #deecf9;
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --text: #1a1a1a;
+      --text-sub: #6b7280;
+      --border: #e5e7eb;
+      --success: #107c10;
+      --danger: #c53030;
+      --warning: #d97706;
+      --grey-color: #6b7280;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Noto Sans JP', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(135deg, #0078d4 0%, #005a9e 100%);
+      color: white;
+      padding: 0 24px;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 12px rgba(0,100,200,0.25);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-brand { display: flex; align-items: center; gap: 10px; }
+    .header-logo { font-size: 22px; }
+    .header-title { font-size: 16px; font-weight: 700; letter-spacing: 0.3px; }
+    .header-sub { font-size: 10px; opacity: 0.75; margin-top: 1px; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .header-username { font-size: 13px; opacity: 0.9; }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 7px 16px;
+      border-radius: 5px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      font-weight: 500;
+      transition: all 0.18s;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background: var(--ms-blue); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--ms-dark); }
+    .btn-ghost { background: rgba(255,255,255,0.18); color: #fff; border: 1px solid rgba(255,255,255,0.35); }
+    .btn-ghost:hover:not(:disabled) { background: rgba(255,255,255,0.28); }
+    .btn-outline { background: #fff; color: var(--ms-blue); border: 1.5px solid var(--ms-blue); }
+    .btn-outline:hover:not(:disabled) { background: var(--ms-blue); color: #fff; }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-success:hover:not(:disabled) { background: #0b6e0b; }
+    .btn-danger { background: #fff; color: var(--danger); border: 1px solid #fca5a5; }
+    .btn-danger:hover:not(:disabled) { background: #fef2f2; }
+    .btn-block { width: 100%; justify-content: center; padding: 11px; font-size: 14px; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+    /* ── Setup Screen ── */
+    #setup-screen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 58px);
+      padding: 24px;
+    }
+    .setup-card {
+      background: white;
+      border-radius: 14px;
+      padding: 44px 40px;
+      max-width: 580px;
+      width: 100%;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+    }
+    .setup-icon { font-size: 44px; margin-bottom: 20px; display: block; }
+    .setup-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    .setup-desc { font-size: 13px; color: var(--text-sub); line-height: 1.7; margin-bottom: 28px; }
+
+    .hint-box {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin-bottom: 24px;
+      font-size: 12.5px;
+      color: #1e40af;
+      line-height: 1.8;
+    }
+    .hint-box strong { display: block; margin-bottom: 8px; font-size: 13px; color: #1e3a8a; }
+    .hint-box ol { padding-left: 18px; }
+    .hint-box li { margin-bottom: 2px; }
+    .hint-box code {
+      background: rgba(30,64,175,0.1);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 11px;
+      word-break: break-all;
+    }
+    .hint-box a { color: #1d4ed8; }
+
+    .form-group { margin-bottom: 18px; }
+    .form-label { display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+    .form-input, .form-select {
+      width: 100%;
+      padding: 10px 13px;
+      border: 1.5px solid var(--border);
+      border-radius: 7px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border 0.2s, box-shadow 0.2s;
+      background: white;
+    }
+    .form-input:focus, .form-select:focus {
+      outline: none;
+      border-color: var(--ms-blue);
+      box-shadow: 0 0 0 3px rgba(0,120,212,0.12);
+    }
+    .form-error { color: var(--danger); font-size: 12px; margin-top: 8px; min-height: 16px; }
+
+    /* ── Main Screen ── */
+    #main-screen { display: none; }
+    .main-layout {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 20px;
+      padding: 20px 24px 32px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    /* ── Card / Panel ── */
+    .card {
+      background: white;
+      border-radius: var(--radius);
+      box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .card-title { font-size: 14px; font-weight: 700; }
+    .card-body { padding: 16px 18px; }
+
+    /* ── Filter Bar ── */
+    .filter-bar {
+      padding: 10px 18px;
+      background: #fafafa;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .filter-select {
+      padding: 5px 10px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font-size: 12.5px;
+      font-family: inherit;
+      background: white;
+      cursor: pointer;
+      min-width: 100px;
+    }
+
+    /* ── Task List ── */
+    .task-list { max-height: calc(100vh - 220px); overflow-y: auto; }
+    .task-item {
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      cursor: pointer;
+      transition: background 0.12s;
+      position: relative;
+    }
+    .task-item:hover { background: #f9fafb; }
+    .task-item.selected { background: #eff6ff; }
+    .task-item.selected::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: var(--ms-blue);
+      border-radius: 0 2px 2px 0;
+    }
+    .task-item.completed { opacity: 0.5; }
+    .task-circle {
+      width: 18px;
+      height: 18px;
+      border: 2px solid #d1d5db;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 2px;
+      position: relative;
+    }
+    .task-circle.done {
+      border-color: var(--success);
+      background: var(--success);
+    }
+    .task-circle.done::after {
+      content: '✓';
+      color: white;
+      font-size: 10px;
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-weight: 700;
+    }
+    .task-info { flex: 1; min-width: 0; }
+    .task-title {
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 5px;
+    }
+    .task-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+    .tag {
+      font-size: 10.5px;
+      padding: 2px 7px;
+      border-radius: 3px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .tag-list { background: #f3f4f6; color: #4b5563; }
+    .tag-due { background: #fef3c7; color: #92400e; }
+    .tag-overdue { background: #fee2e2; color: #991b1b; }
+    .tag-nodue { background: #f3f4f6; color: #9ca3af; }
+    .tag-registered { background: #dcfce7; color: #166534; }
+    .tag-greyed { background: #f3f4f6; color: #6b7280; }
+    .task-radio { flex-shrink: 0; margin-top: 2px; }
+    input[type="radio"] { accent-color: var(--ms-blue); cursor: pointer; }
+
+    /* ── Right Panel ── */
+    .right-stack { display: flex; flex-direction: column; gap: 16px; }
+    .section-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--text-sub);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .time-row { display: grid; grid-template-columns: 1fr 20px 1fr; gap: 8px; align-items: center; }
+    .time-sep { text-align: center; color: var(--text-sub); }
+    .time-input, .date-input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    .time-input:focus, .date-input:focus {
+      outline: none;
+      border-color: var(--ms-blue);
+    }
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      cursor: pointer;
+      color: var(--text);
+    }
+    .check-row input[type="checkbox"] { accent-color: var(--ms-blue); width: 14px; height: 14px; }
+
+    .selected-info-box {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 7px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+    }
+    .sel-task-name { font-weight: 600; font-size: 13px; color: var(--text); margin-bottom: 3px; }
+    .sel-task-due { font-size: 11.5px; color: var(--text-sub); }
+    .sel-preview { font-size: 12px; color: var(--ms-blue); margin-top: 6px; font-weight: 600; }
+    .sel-warning { font-size: 11.5px; color: var(--warning); margin-top: 6px; }
+
+    /* ── Registered List ── */
+    .reg-list { max-height: 220px; overflow-y: auto; }
+    .reg-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12.5px;
+    }
+    .reg-item:last-child { border-bottom: none; }
+    .reg-name {
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 500;
+    }
+    .reg-meta { font-size: 10.5px; color: var(--text-sub); }
+
+    /* ── Sync Status ── */
+    .sync-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: #f9fafb;
+      border-radius: 7px;
+      font-size: 12.5px;
+      color: var(--text-sub);
+    }
+
+    /* ── Progress Overlay ── */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.42);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .overlay.show { display: flex; }
+    .progress-card {
+      background: white;
+      border-radius: 14px;
+      padding: 36px 44px;
+      text-align: center;
+      min-width: 320px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .progress-title { font-size: 15px; font-weight: 700; margin-bottom: 20px; }
+    .progress-track { height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; margin-bottom: 12px; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--ms-blue), #60a5fa); border-radius: 3px; transition: width 0.35s ease; width: 0%; }
+    .progress-label { font-size: 12.5px; color: var(--text-sub); }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #1f2937;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      z-index: 2000;
+      transform: translateY(12px);
+      opacity: 0;
+      transition: all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+      max-width: 340px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.success { background: #15803d; }
+    .toast.error { background: #b91c1c; }
+    .toast.info { background: var(--ms-dark); }
+
+    /* ── Utilities ── */
+    .spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2px solid #e5e7eb;
+      border-top-color: var(--ms-blue);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--text-sub);
+    }
+    .empty-icon { font-size: 36px; margin-bottom: 12px; }
+    .empty-msg { font-size: 13px; line-height: 1.6; }
+
+    @media (max-width: 900px) {
+      .main-layout { grid-template-columns: 1fr; }
+      .task-list { max-height: 50vh; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ====== Header ====== -->
+<header class="header">
+  <div class="header-brand">
+    <span class="header-logo">📅</span>
+    <div>
+      <div class="header-title">ToDo → Calendar Sync</div>
+      <div class="header-sub">Outlook ToDo をカレンダーへ自動登録</div>
+    </div>
+  </div>
+  <div class="header-right" id="header-right" style="display:none">
+    <span class="header-username" id="header-username"></span>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">ログアウト</button>
+  </div>
+</header>
+
+<!-- ====== Setup Screen ====== -->
+<div id="setup-screen">
+  <div class="setup-card">
+    <span class="setup-icon">🔧</span>
+    <div class="setup-title">初期設定</div>
+    <p class="setup-desc">
+      Microsoft 365 アカウントと連携して、Outlook ToDo のタスクを<br>
+      カレンダーへ自動登録・完了時グレー化を行います。
+    </p>
+
+    <div class="hint-box">
+      <strong>⚙️ Azure アプリの登録が必要です（初回のみ・5分）</strong>
+      <ol>
+        <li>
+          <a href="https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank">
+            Azure Portal → アプリの登録
+          </a>　→「新規登録」
+        </li>
+        <li>名前: 任意（例: TodoCalendarSync）</li>
+        <li>サポートされているアカウント: 「任意の組織ディレクトリ内のアカウント」または「個人用 Microsoft アカウント」</li>
+        <li>リダイレクト URI:「シングルページアプリ (SPA)」を選択 →
+          <code id="current-redirect-uri">（ページ読み込み後に表示）</code>
+        </li>
+        <li>登録後 → 「APIのアクセス許可」→ 以下を追加（委任）:
+          <code>Tasks.Read</code>　<code>Calendars.ReadWrite</code>　<code>MailboxSettings.ReadWrite</code>
+        </li>
+        <li>「概要」画面の「アプリケーション（クライアント）ID」をコピーして下に貼り付け</li>
+      </ol>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">クライアント ID（Application ID）</label>
+      <input type="text" id="client-id-input" class="form-input"
+             placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+    </div>
+
+    <button class="btn btn-primary btn-block" onclick="initAndLogin()">
+      🔐 Microsoft アカウントでログイン
+    </button>
+    <div class="form-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- ====== Main Screen ====== -->
+<div id="main-screen">
+  <div class="main-layout">
+
+    <!-- ── Left: Task List ── -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📋 ToDo タスク一覧</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span id="task-count-badge" style="font-size:11px;color:var(--text-sub);"></span>
+          <button class="btn btn-outline btn-sm" onclick="loadTasks()">🔄 更新</button>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <select class="filter-select" id="list-filter" onchange="renderTasks()">
+          <option value="all">すべてのリスト</option>
+        </select>
+        <select class="filter-select" id="status-filter" onchange="renderTasks()">
+          <option value="active">未完了のみ</option>
+          <option value="all">すべて表示</option>
+        </select>
+      </div>
+      <div class="task-list" id="task-list">
+        <div class="empty-state">
+          <div class="spinner" style="margin:0 auto 12px;"></div>
+          <div class="empty-msg">タスクを読み込んでいます...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Right: Settings + Sync ── -->
+    <div class="right-stack">
+
+      <!-- Registration Settings Card -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🗓 カレンダー登録設定</span>
+        </div>
+        <div class="card-body">
+
+          <div id="no-task-selected" style="text-align:center;color:var(--text-sub);padding:20px 0;font-size:13px;">
+            ← タスクを選択してください
+          </div>
+
+          <div id="registration-form" style="display:none;">
+            <div class="selected-info-box">
+              <div class="sel-task-name" id="sel-task-name"></div>
+              <div class="sel-task-due" id="sel-task-due"></div>
+              <div class="sel-preview" id="sel-preview"></div>
+              <div class="sel-warning" id="sel-warning"></div>
+            </div>
+
+            <div style="margin-bottom:14px;">
+              <div class="section-label">開始日</div>
+              <input type="date" class="date-input" id="start-date" onchange="updatePreview()">
+            </div>
+
+            <div style="margin-bottom:14px;">
+              <div class="section-label">毎日の時間帯</div>
+              <div class="time-row">
+                <input type="time" class="time-input" id="start-time" value="11:00" onchange="updatePreview()">
+                <div class="time-sep">〜</div>
+                <input type="time" class="time-input" id="end-time" value="12:00" onchange="updatePreview()">
+              </div>
+            </div>
+
+            <div style="margin-bottom:18px;">
+              <div class="section-label">オプション</div>
+              <label class="check-row">
+                <input type="checkbox" id="skip-weekends" onchange="updatePreview()">
+                土日を除く
+              </label>
+            </div>
+
+            <button class="btn btn-primary btn-block" id="register-btn" onclick="registerToCalendar()">
+              📅 カレンダーに登録する
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sync Card -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🔄 完了同期（グレー化）</span>
+          <button class="btn btn-outline btn-sm" id="sync-btn" onclick="syncCompletion()">同期実行</button>
+        </div>
+        <div class="card-body">
+          <div class="sync-badge" id="sync-status">
+            <span>💡</span>
+            <span>「同期実行」でToDo完了状態をカレンダーに反映</span>
+          </div>
+          <div class="reg-list" id="registered-list" style="margin-top:12px;"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ====== Progress Overlay ====== -->
+<div class="overlay" id="overlay">
+  <div class="progress-card">
+    <div class="progress-title" id="prog-title">処理中...</div>
+    <div class="progress-track">
+      <div class="progress-fill" id="prog-bar"></div>
+    </div>
+    <div class="progress-label" id="prog-label"></div>
+  </div>
+</div>
+
+<!-- ====== Toast ====== -->
+<div class="toast" id="toast"></div>
+
+<!-- ====== Script ====== -->
+<script>
+// ================================================================
+//  STATE
+// ================================================================
+let msalInstance = null;
+let account = null;
+let allTasks = [];
+let todoLists = [];
+let selectedTaskId = null;
+let taskEventMap = {};
+
+const GREY_CATEGORY = '完了（グレー）';
+const SCOPES = ['Tasks.Read', 'Calendars.ReadWrite', 'MailboxSettings.ReadWrite'];
+
+// ================================================================
+//  INIT
+// ================================================================
+(function init() {
+  // Set redirect URI hint
+  document.getElementById('current-redirect-uri').textContent =
+    window.location.origin + window.location.pathname;
+
+  // Load stored map
+  try {
+    taskEventMap = JSON.parse(localStorage.getItem('taskEventMap') || '{}');
+  } catch { taskEventMap = {}; }
+
+  // Auto-login if client ID already saved
+  const savedId = localStorage.getItem('msClientId');
+  if (savedId) {
+    document.getElementById('client-id-input').value = savedId;
+    buildMsal(savedId).then(tryAutoLogin).catch(console.error);
+  }
+})();
+
+async function buildMsal(clientId) {
+  msalInstance = new msal.PublicClientApplication({
+    auth: {
+      clientId,
+      authority: 'https://login.microsoftonline.com/common',
+      redirectUri: window.location.origin + window.location.pathname
+    },
+    cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
+  });
+}
+
+async function tryAutoLogin() {
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length > 0) {
+    account = accounts[0];
+    enterApp();
+  }
+}
+
+async function initAndLogin() {
+  const clientId = document.getElementById('client-id-input').value.trim();
+  if (!clientId) {
+    setLoginError('クライアントIDを入力してください。');
+    return;
+  }
+  if (!/^[0-9a-f-]{36}$/i.test(clientId)) {
+    setLoginError('クライアントIDの形式が正しくありません。');
+    return;
+  }
+  setLoginError('');
+  try {
+    await buildMsal(clientId);
+    const result = await msalInstance.loginPopup({ scopes: SCOPES });
+    account = result.account;
+    localStorage.setItem('msClientId', clientId);
+    enterApp();
+  } catch (err) {
+    setLoginError('ログインに失敗しました: ' + (err.message || err));
+  }
+}
+
+function setLoginError(msg) {
+  document.getElementById('login-error').textContent = msg;
+}
+
+function enterApp() {
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('main-screen').style.display = 'block';
+  document.getElementById('header-right').style.display = 'flex';
+  document.getElementById('header-username').textContent = account.name || account.username || '';
+  loadTasks();
+  renderRegisteredList();
+}
+
+function logout() {
+  localStorage.removeItem('msClientId');
+  if (msalInstance) msalInstance.logoutPopup({ account }).catch(() => {}).finally(() => location.reload());
+  else location.reload();
+}
+
+// ================================================================
+//  GRAPH API
+// ================================================================
+async function getToken() {
+  try {
+    const r = await msalInstance.acquireTokenSilent({ scopes: SCOPES, account });
+    return r.accessToken;
+  } catch {
+    const r = await msalInstance.acquireTokenPopup({ scopes: SCOPES });
+    account = r.account;
+    return r.accessToken;
+  }
+}
+
+async function callGraph(endpoint, method = 'GET', body = null) {
+  const token = await getToken();
+  const resp = await fetch('https://graph.microsoft.com/v1.0' + endpoint, {
+    method,
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (resp.status === 204 || method === 'DELETE') return null;
+  if (!resp.ok) {
+    const txt = await resp.text();
+    throw new Error(`[${resp.status}] ${txt}`);
+  }
+  return resp.json();
+}
+
+// ================================================================
+//  LOAD TASKS
+// ================================================================
+async function loadTasks() {
+  setTaskListHtml(`<div class="empty-state"><div class="spinner" style="margin:0 auto 12px;"></div><div class="empty-msg">タスクを読み込んでいます...</div></div>`);
+
+  try {
+    const listsRes = await callGraph('/me/todo/lists');
+    todoLists = listsRes.value || [];
+
+    // Update list filter
+    const sel = document.getElementById('list-filter');
+    sel.innerHTML = '<option value="all">すべてのリスト</option>';
+    todoLists.forEach(l => {
+      const o = document.createElement('option');
+      o.value = l.id; o.textContent = l.displayName;
+      sel.appendChild(o);
+    });
+
+    // Fetch tasks from all lists
+    allTasks = [];
+    for (const list of todoLists) {
+      let url = `/me/todo/lists/${list.id}/tasks?$top=100`;
+      while (url) {
+        const res = await callGraph(url);
+        (res.value || []).forEach(t => {
+          allTasks.push({ ...t, listId: list.id, listName: list.displayName });
+        });
+        url = res['@odata.nextLink']
+          ? res['@odata.nextLink'].replace('https://graph.microsoft.com/v1.0', '')
+          : null;
+      }
+    }
+
+    document.getElementById('task-count-badge').textContent = `${allTasks.length}件`;
+    renderTasks();
+  } catch (err) {
+    setTaskListHtml(`<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-msg">読み込みエラー<br><small>${esc(err.message)}</small></div></div>`);
+  }
+}
+
+function setTaskListHtml(html) {
+  document.getElementById('task-list').innerHTML = html;
+}
+
+// ================================================================
+//  RENDER TASKS
+// ================================================================
+function renderTasks() {
+  const listF = document.getElementById('list-filter').value;
+  const statusF = document.getElementById('status-filter').value;
+
+  let tasks = allTasks.filter(t => {
+    if (listF !== 'all' && t.listId !== listF) return false;
+    if (statusF === 'active' && t.status === 'completed') return false;
+    return true;
+  });
+
+  // Sort: due date asc, no-due last
+  tasks.sort((a, b) => {
+    const aD = a.dueDateTime ? parseDue(a.dueDateTime) : null;
+    const bD = b.dueDateTime ? parseDue(b.dueDateTime) : null;
+    if (aD && bD) return aD - bD;
+    if (aD) return -1;
+    if (bD) return 1;
+    return 0;
+  });
+
+  if (tasks.length === 0) {
+    setTaskListHtml(`<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-msg">タスクが見つかりません</div></div>`);
+    return;
+  }
+
+  const html = tasks.map(t => {
+    const done = t.status === 'completed';
+    const sel = t.id === selectedTaskId;
+    const regInfo = taskEventMap[t.id];
+    const isRegistered = !!regInfo;
+    const isGreyed = isRegistered && regInfo.grey;
+
+    // Due tag
+    let dueTag = '';
+    if (t.dueDateTime) {
+      const due = parseDue(t.dueDateTime);
+      const today = new Date(); today.setHours(0,0,0,0);
+      const overdue = due < today && !done;
+      const dateStr = due.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric' });
+      dueTag = `<span class="tag ${overdue ? 'tag-overdue' : 'tag-due'}">📅 ${dateStr}まで</span>`;
+    } else {
+      dueTag = `<span class="tag tag-nodue">期限なし</span>`;
+    }
+
+    // Status tag
+    let stTag = '';
+    if (isGreyed) stTag = `<span class="tag tag-greyed">🔘 グレー済</span>`;
+    else if (isRegistered) stTag = `<span class="tag tag-registered">✅ 登録済</span>`;
+
+    return `
+      <div class="task-item ${sel ? 'selected' : ''} ${done ? 'completed' : ''}"
+           onclick="selectTask('${esc(t.id)}')">
+        <div class="task-circle ${done ? 'done' : ''}"></div>
+        <div class="task-info">
+          <div class="task-title">${esc(t.title)}</div>
+          <div class="task-tags">
+            <span class="tag tag-list">${esc(t.listName)}</span>
+            ${dueTag}
+            ${stTag}
+          </div>
+        </div>
+        <input type="radio" class="task-radio" name="tsel" ${sel ? 'checked' : ''}
+               onclick="selectTask('${esc(t.id)}')">
+      </div>`;
+  }).join('');
+
+  setTaskListHtml(html);
+}
+
+// ================================================================
+//  SELECT TASK
+// ================================================================
+function selectTask(taskId) {
+  selectedTaskId = taskId;
+  renderTasks();
+
+  const task = allTasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  document.getElementById('no-task-selected').style.display = 'none';
+  document.getElementById('registration-form').style.display = 'block';
+
+  // Set today as default start date
+  const today = new Date();
+  document.getElementById('start-date').value = fmtDate(today);
+
+  // Task info
+  document.getElementById('sel-task-name').textContent = task.title;
+
+  if (task.dueDateTime) {
+    const due = parseDue(task.dueDateTime);
+    document.getElementById('sel-task-due').textContent =
+      '期限: ' + due.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
+  } else {
+    document.getElementById('sel-task-due').textContent = '期限: 未設定（登録には期限が必要）';
+  }
+
+  // Register button state
+  const regBtn = document.getElementById('register-btn');
+  const regInfo = taskEventMap[taskId];
+  if (regInfo && regInfo.eventIds.length > 0) {
+    regBtn.textContent = `🔄 再登録する（既存 ${regInfo.eventIds.length} 件を削除して再作成）`;
+    regBtn.className = 'btn btn-block';
+    regBtn.style.background = '#6b7280';
+    regBtn.style.color = '#fff';
+    regBtn.style.border = 'none';
+  } else {
+    regBtn.textContent = '📅 カレンダーに登録する';
+    regBtn.className = 'btn btn-primary btn-block';
+    regBtn.style.background = '';
+    regBtn.style.color = '';
+    regBtn.style.border = '';
+  }
+
+  updatePreview();
+}
+
+function updatePreview() {
+  const task = allTasks.find(t => t.id === selectedTaskId);
+  if (!task) return;
+
+  const previewEl = document.getElementById('sel-preview');
+  const warnEl = document.getElementById('sel-warning');
+  previewEl.textContent = '';
+  warnEl.textContent = '';
+
+  if (!task.dueDateTime) {
+    previewEl.textContent = '⚠️ 期限が設定されていないため登録できません';
+    return;
+  }
+
+  const startVal = document.getElementById('start-date').value;
+  if (!startVal) return;
+
+  const startDate = new Date(startVal + 'T00:00:00');
+  const dueDate = parseDue(task.dueDateTime);
+  const skip = document.getElementById('skip-weekends').checked;
+  const count = countDays(startDate, dueDate, skip);
+
+  const st = document.getElementById('start-time').value;
+  const et = document.getElementById('end-time').value;
+
+  if (count <= 0) {
+    previewEl.textContent = '⚠️ 開始日が期限を超えています';
+    return;
+  }
+
+  previewEl.textContent = `→ ${count} 件のイベントを作成 (${st} 〜 ${et})`;
+
+  if (count > 60) {
+    warnEl.textContent = `⚠️ ${count} 件は多数です。作成に時間がかかります。`;
+  }
+}
+
+// ================================================================
+//  REGISTER TO CALENDAR
+// ================================================================
+async function registerToCalendar() {
+  const task = allTasks.find(t => t.id === selectedTaskId);
+  if (!task) return;
+
+  if (!task.dueDateTime) {
+    showToast('期限が設定されていないタスクは登録できません', 'error');
+    return;
+  }
+
+  const startVal = document.getElementById('start-date').value;
+  const st = document.getElementById('start-time').value;
+  const et = document.getElementById('end-time').value;
+  const skip = document.getElementById('skip-weekends').checked;
+
+  if (!startVal || !st || !et) {
+    showToast('日付と時間を入力してください', 'error');
+    return;
+  }
+
+  const [sh, sm] = st.split(':').map(Number);
+  const [eh, em] = et.split(':').map(Number);
+  if (sh * 60 + sm >= eh * 60 + em) {
+    showToast('終了時刻は開始時刻より後に設定してください', 'error');
+    return;
+  }
+
+  const startDate = new Date(startVal + 'T00:00:00');
+  const dueDate = parseDue(task.dueDateTime);
+
+  // Build day list
+  const days = [];
+  const cur = new Date(startDate);
+  while (cur <= dueDate) {
+    const dow = cur.getDay();
+    if (!skip || (dow !== 0 && dow !== 6)) days.push(new Date(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  if (days.length === 0) {
+    showToast('登録対象の日付がありません', 'error');
+    return;
+  }
+
+  showOverlay('カレンダーに登録中...', 0, '');
+
+  // Delete existing events if re-registering
+  const existing = taskEventMap[selectedTaskId];
+  if (existing && existing.eventIds.length > 0) {
+    const oldIds = existing.eventIds;
+    for (let i = 0; i < oldIds.length; i++) {
+      try { await callGraph(`/me/events/${oldIds[i]}`, 'DELETE'); } catch { /* already gone */ }
+      setOverlay('既存イベントを削除中...', (i + 1) / oldIds.length * 25, `${i + 1} / ${oldIds.length}`);
+    }
+  }
+
+  // Create new events
+  const newIds = [];
+  for (let i = 0; i < days.length; i++) {
+    const d = days[i];
+    const startDT = new Date(d); startDT.setHours(sh, sm, 0, 0);
+    const endDT   = new Date(d); endDT.setHours(eh, em, 0, 0);
+
+    const payload = {
+      subject: `[ToDo] ${task.title}`,
+      body: {
+        contentType: 'text',
+        content: `ToDo 同期タスク\nリスト: ${task.listName}\n期限: ${dueDate.toLocaleDateString('ja-JP')}`
+      },
+      start: { dateTime: fmtDateTime(startDT), timeZone: 'Tokyo Standard Time' },
+      end:   { dateTime: fmtDateTime(endDT),   timeZone: 'Tokyo Standard Time' }
+    };
+
+    try {
+      const created = await callGraph('/me/events', 'POST', payload);
+      newIds.push(created.id);
+    } catch (e) {
+      console.error('Event creation failed:', e);
+    }
+
+    setOverlay(`イベント作成中...`, 25 + (i + 1) / days.length * 75, `${i + 1} / ${days.length}`);
+  }
+
+  // Save mapping
+  taskEventMap[selectedTaskId] = {
+    eventIds: newIds,
+    title: task.title,
+    listId: task.listId,
+    grey: false
+  };
+  saveMap();
+
+  hideOverlay();
+  showToast(`✅ ${newIds.length} 件のイベントを登録しました`, 'success');
+  renderTasks();
+  renderRegisteredList();
+  selectTask(selectedTaskId);
+}
+
+// ================================================================
+//  SYNC COMPLETION → GREY
+// ================================================================
+async function syncCompletion() {
+  const btn = document.getElementById('sync-btn');
+  btn.disabled = true;
+  btn.textContent = '同期中...';
+
+  setSyncStatus(`<div class="spinner"></div> <span>完了状態を確認中...</span>`);
+
+  try {
+    await ensureGreyCategory();
+
+    const ids = Object.keys(taskEventMap);
+    if (ids.length === 0) {
+      setSyncStatus('💡 登録済みタスクがありません');
+      return;
+    }
+
+    let greyed = 0;
+    for (const taskId of ids) {
+      const info = taskEventMap[taskId];
+      if (info.grey) continue;
+      try {
+        const t = await callGraph(`/me/todo/lists/${info.listId}/tasks/${taskId}`);
+        if (t.status === 'completed') {
+          await greyOutEvents(taskId);
+          greyed++;
+        }
+      } catch (e) {
+        console.warn('Sync check failed for task', taskId, e.message);
+      }
+    }
+
+    const now = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    setSyncStatus(`✅ 同期完了 (${now}) - ${greyed} 件をグレーに変更`);
+    renderTasks();
+    renderRegisteredList();
+  } catch (err) {
+    setSyncStatus(`❌ エラー: ${esc(err.message)}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '同期実行';
+  }
+}
+
+function setSyncStatus(html) {
+  document.getElementById('sync-status').innerHTML = html;
+}
+
+async function ensureGreyCategory() {
+  try {
+    const cats = await callGraph('/me/outlook/masterCategories');
+    const exists = (cats.value || []).find(c => c.displayName === GREY_CATEGORY);
+    if (!exists) {
+      await callGraph('/me/outlook/masterCategories', 'POST', {
+        displayName: GREY_CATEGORY,
+        color: 'preset12'  // Grey in Microsoft's color presets
+      });
+    }
+  } catch (e) {
+    console.warn('Grey category setup failed (non-fatal):', e.message);
+  }
+}
+
+async function greyOutEvents(taskId) {
+  const info = taskEventMap[taskId];
+  if (!info) return;
+  for (const eventId of info.eventIds) {
+    try {
+      await callGraph(`/me/events/${eventId}`, 'PATCH', {
+        categories: [GREY_CATEGORY]
+      });
+    } catch (e) {
+      console.warn('Could not grey event', eventId, e.message);
+    }
+  }
+  taskEventMap[taskId].grey = true;
+  saveMap();
+}
+
+// ================================================================
+//  REGISTERED LIST
+// ================================================================
+function renderRegisteredList() {
+  const container = document.getElementById('registered-list');
+  const ids = Object.keys(taskEventMap);
+
+  if (ids.length === 0) {
+    container.innerHTML = `<div style="text-align:center;color:#9ca3af;font-size:12px;padding:12px 0;">登録済みタスクなし</div>`;
+    return;
+  }
+
+  container.innerHTML = ids.map(id => {
+    const m = taskEventMap[id];
+    const icon = m.grey ? '🔘' : '📅';
+    const color = m.grey ? 'var(--grey-color)' : 'var(--success)';
+    return `
+      <div class="reg-item">
+        <div style="flex:1;min-width:0;">
+          <div class="reg-name">${esc(m.title)}</div>
+          <div class="reg-meta">${m.eventIds.length} 件 / ${m.grey ? 'グレー済' : '登録中'}</div>
+        </div>
+        <span style="color:${color};font-size:13px;">${icon}</span>
+        <button class="btn btn-danger btn-sm" onclick="removeRegistration('${esc(id)}')">削除</button>
+      </div>`;
+  }).join('');
+}
+
+function removeRegistration(taskId) {
+  if (!confirm('この登録情報を削除しますか？\n（カレンダーのイベントは削除されません）')) return;
+  delete taskEventMap[taskId];
+  saveMap();
+  renderRegisteredList();
+  renderTasks();
+}
+
+function saveMap() {
+  localStorage.setItem('taskEventMap', JSON.stringify(taskEventMap));
+}
+
+// ================================================================
+//  OVERLAY / TOAST
+// ================================================================
+function showOverlay(title, pct, label) {
+  document.getElementById('prog-title').textContent = title;
+  document.getElementById('prog-bar').style.width = pct + '%';
+  document.getElementById('prog-label').textContent = label;
+  document.getElementById('overlay').classList.add('show');
+}
+function setOverlay(title, pct, label) {
+  document.getElementById('prog-title').textContent = title;
+  document.getElementById('prog-bar').style.width = Math.min(pct, 100) + '%';
+  document.getElementById('prog-label').textContent = label;
+}
+function hideOverlay() {
+  document.getElementById('overlay').classList.remove('show');
+}
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.className = 'toast'; }, 3800);
+}
+
+// ================================================================
+//  HELPERS
+// ================================================================
+function parseDue(dueDateTimeObj) {
+  // dueDateTime.dateTime = "2025-04-17T00:00:00.0000000" (local date, no timezone conversion)
+  const [y, mo, d] = dueDateTimeObj.dateTime.split('T')[0].split('-').map(Number);
+  return new Date(y, mo - 1, d);
+}
+
+function countDays(start, end, skipWeekends) {
+  let count = 0;
+  const c = new Date(start);
+  c.setHours(0, 0, 0, 0);
+  const e = new Date(end);
+  e.setHours(0, 0, 0, 0);
+  while (c <= e) {
+    const dow = c.getDay();
+    if (!skipWeekends || (dow !== 0 && dow !== 6)) count++;
+    c.setDate(c.getDate() + 1);
+  }
+  return count;
+}
+
+function fmtDate(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function fmtDateTime(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+}
+
+function esc(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>
