@@ -6,7 +6,28 @@
   <title>ToDo → Calendar Sync | Outlook 自動登録ツール</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
-  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+  <script>
+    // MSAL フォールバック読み込み
+    (function() {
+      var cdns = [
+        'https://alcdn.msauth.net/browser/2.32.0/js/msal-browser.min.js',
+        'https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.32.0/dist/msal-browser.min.js',
+        'https://unpkg.com/@azure/msal-browser@2.32.0/dist/msal-browser.min.js'
+      ];
+      var idx = 0;
+      function tryLoad() {
+        if (idx >= cdns.length) {
+          document.getElementById('login-error').textContent = 'MSALライブラリの読み込みに失敗しました。ネットワーク接続を確認してください。';
+          return;
+        }
+        var s = document.createElement('script');
+        s.src = cdns[idx++];
+        s.onerror = tryLoad;
+        document.head.appendChild(s);
+      }
+      tryLoad();
+    })();
+  </script>
   <style>
     :root {
       --ms-blue: #0078d4;
